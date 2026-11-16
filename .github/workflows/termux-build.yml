@@ -11,6 +11,7 @@ jobs:
       run:
         working-directory: codex-rs
     env:
+      RUSTUP_TOOLCHAIN: '1.99.1'
       CARGO_INCREMENTAL: '0'
       CARGO_BUILD_JOBS: '2'
     steps:
