@@ -6,6 +6,7 @@ The directory retains upstream's UID, symlink and mode-0700 checks. Its short
 name accommodates the transport's full SHA-256 filename within sun_path.
 This path targets the standard com.termux package on Android user 0.
 
+Use Rust 1.99.1 or later for Android file-lock support.
 Install the native build tools in Termux:
 
 ```sh
