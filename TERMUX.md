@@ -10,8 +10,8 @@ Build in Termux with Rust, clang, make, pkg-config and protobuf installed:
 
 ```sh
 cd codex-rs
-CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=2 cargo build -p codex-cli --bin codex --profile dev-small
-cargo test -p codex-uds --profile dev-small
+CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=2 sh ../scripts/termux/cargo.sh build -p codex-cli --bin codex --profile dev-small
+sh ../scripts/termux/cargo.sh test -p codex-uds --profile dev-small
 ./target/dev-small/codex remote-control --no-daemon
 ```
 
@@ -23,3 +23,8 @@ still require your existing account and remote-control access.
 A manually dispatched `Termux Android build` GitHub Actions workflow also
 cross-compiles the CLI and device test binaries. Download the artifact and
 run its test executable on Android, then test remote control on the device.
+
+The build wrapper temporarily excludes the separate V8 host/runtime workspace
+members and their Git patch, then restores Cargo.toml and Cargo.lock on exit.
+This avoids downloading Chromium for the CLI, which does not link that host.
+The optional V8 code-mode host is not included in this Android artifact.
