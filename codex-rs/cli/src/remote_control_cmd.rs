@@ -54,7 +54,7 @@ pub(crate) struct RemoteControlCommand {
 
 fn parse_remote_name(value: &str) -> Result<String, String> {
     let name = value.trim();
-    if name.is_empty() || name.chars().any(char::is_control) {
+    if name.is_empty() || value.chars().any(char::is_control) {
         return Err("name must contain visible text and no control characters".to_string());
     }
     Ok(name.to_string())
@@ -634,6 +634,7 @@ mod tests {
         assert_eq!(parse_remote_name("  My Phone  ").unwrap(), "My Phone");
         assert!(parse_remote_name("   ").is_err());
         assert!(parse_remote_name("Phone\nOther").is_err());
+        assert!(parse_remote_name("Phone\n").is_err());
     }
 
     fn remote_control_status(
