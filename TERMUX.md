@@ -69,3 +69,30 @@ The validated native executable is installed beside the original CLI at
 Enter the printed short-lived code in the remote app and keep this process
 running. Press Ctrl-C to stop it. Completing the connection in the remote app
 requires the user to enter the code; that UI step was not automated.
+
+## Custom-name and helper installation validation
+
+The updated native CLI and installer were tested on the Android device:
+
+- Six installer tests pass, including PATH discovery, missing-helper failure
+  without replacing an existing CLI, repeated installs, and packaged layout.
+- The helper-aware installer updated `~/.local/bin/codex-termux` and retained
+  its working adjacent `codex-code-mode-host` link; the helper launches.
+- `scripts/termux/test_remote_name.py` verified the actual enrollment POST
+  against a loopback mock: `--name "  My Phone  "` sends `My Phone`, while
+  omitting the option sends the system hostname. Invalid names and use without
+  `--no-daemon` fail argument validation before startup.
+- The current foreground server was left running. Restart it with `--name`
+  to advertise the new display name; replacing the executable does not change
+  a process that is already running.
+
+Reproduce the installer tests with `python scripts/termux/test_install.py`.
+After CLI sign-in, run the local registration smoke test with:
+
+```sh
+python scripts/termux/test_remote_name.py --binary ~/.local/bin/codex-termux
+```
+
+Downloaded build artifacts now include `codex`, `install.sh`, and these
+instructions. From the extracted directory, use `sh install.sh` to install
+both the CLI and the adjacent link to your existing native helper.
