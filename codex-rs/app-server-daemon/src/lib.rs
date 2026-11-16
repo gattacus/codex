@@ -296,6 +296,14 @@ pub async fn start_remote_control_pairing_on_socket(
     remote_control_client::start_pairing(socket_path).await
 }
 
+/// Reads the current connection state without enabling or restarting remote control.
+pub async fn remote_control_status_on_socket(
+    socket_path: &Path,
+) -> Result<RemoteControlReadyStatus> {
+    ensure_supported_platform()?;
+    remote_control_client::status(socket_path).await
+}
+
 pub async fn set_remote_control(mode: RemoteControlMode) -> Result<RemoteControlOutput> {
     ensure_supported_platform()?;
     #[cfg(windows)]

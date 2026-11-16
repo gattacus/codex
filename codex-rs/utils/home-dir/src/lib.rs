@@ -2,6 +2,9 @@ use codex_utils_absolute_path::AbsolutePathBuf;
 use dirs::home_dir;
 use std::path::PathBuf;
 
+#[cfg(any(target_os = "android", test))]
+pub mod termux;
+
 /// Returns the path to the Codex configuration directory, which can be
 /// specified by the `CODEX_HOME` environment variable. If not set, defaults to
 /// `~/.codex`.

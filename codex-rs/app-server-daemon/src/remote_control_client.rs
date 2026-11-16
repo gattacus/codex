@@ -57,6 +57,23 @@ pub(crate) async fn disable_remote_control(socket_path: &Path) -> Result<RemoteC
     Ok(RemoteControlReadyStatus::from(response))
 }
 
+pub(crate) async fn status(socket_path: &Path) -> Result<RemoteControlReadyStatus> {
+    timeout(client::CONTROL_SOCKET_RESPONSE_TIMEOUT, async {
+        let mut websocket = client::connect(socket_path).await?;
+        initialize_client(&mut websocket).await?;
+        loop {
+            if let JSONRPCMessage::Notification(notification) =
+                client::read_message(&mut websocket).await?
+                && let Some(status) = remote_control_status_notification(&notification)
+            {
+                return Ok(RemoteControlReadyStatus::from(status));
+            }
+        }
+    })
+    .await
+    .context("timed out reading remote control status")?
+}
+
 pub(crate) async fn start_pairing(socket_path: &Path) -> Result<RemoteControlPairingStartResponse> {
     timeout(PAIRING_TIMEOUT, start_pairing_inner(socket_path))
         .await
@@ -390,6 +407,29 @@ mod tests {
     const TEST_INSTALLATION_ID: &str = "11111111-1111-4111-8111-111111111111";
     const TEST_SERVER_NAME: &str = "owen-mbp";
     const TEST_CODEX_HOME: &str = "/tmp/codex-home";
+
+    #[tokio::test]
+    async fn status_returns_initial_snapshot_without_enabling_remote_control() -> Result<()> {
+        let dir = TempDir::new()?;
+        let path = dir.path().join("app-remote.sock");
+        let listener = UnixListener::bind(&path).await?;
+        let server = tokio::spawn(async move {
+            let mut websocket = accept_initialized_client(listener).await?;
+            send_remote_control_status(
+                &mut websocket,
+                remote_control_status(RemoteControlConnectionStatus::Disabled, None),
+            )
+            .await?;
+            assert!(client::read_message(&mut websocket).await.is_err());
+            Ok::<(), anyhow::Error>(())
+        });
+        let snapshot = status(&path).await?;
+        server.await??;
+        assert_eq!(snapshot.status, RemoteControlConnectionStatus::Disabled);
+        assert_eq!(snapshot.server_name, TEST_SERVER_NAME);
+        assert_eq!(snapshot.environment_id, None);
+        Ok(())
+    }
 
     #[tokio::test]
     async fn enable_remote_control_uses_connected_enable_response_without_later_notification()

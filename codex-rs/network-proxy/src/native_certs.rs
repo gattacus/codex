@@ -138,7 +138,13 @@ fn dedupe_certs(result: &mut CertificateResult) {
     result.certs.dedup();
 }
 
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(target_os = "android")]
+fn platform_cert_file() -> Option<std::path::PathBuf> {
+    let path = codex_utils_home_dir::termux::files_dir().join("usr/etc/tls/cert.pem");
+    path.exists().then_some(path)
+}
+
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))]
 fn platform_cert_file() -> Option<std::path::PathBuf> {
     PLATFORM_CERTIFICATE_FILE_NAMES
         .iter()
@@ -223,10 +229,6 @@ const PLATFORM_CERTIFICATE_FILE_NAMES: &[&str] = &["/etc/certs/ca-certificates.c
 #[cfg(all(unix, not(target_os = "macos"), target_os = "illumos"))]
 const PLATFORM_CERTIFICATE_FILE_NAMES: &[&str] =
     &["/etc/ssl/cacert.pem", "/etc/certs/ca-certificates.crt"];
-
-#[cfg(all(unix, not(target_os = "macos"), target_os = "android"))]
-const PLATFORM_CERTIFICATE_FILE_NAMES: &[&str] =
-    &["/data/data/com.termux/files/usr/etc/tls/cert.pem"];
 
 #[cfg(all(unix, not(target_os = "macos"), target_os = "haiku"))]
 const PLATFORM_CERTIFICATE_FILE_NAMES: &[&str] = &["/boot/system/data/ssl/CARootCertificates.pem"];

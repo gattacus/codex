@@ -16,7 +16,13 @@ pub fn shared_daemon_socket_directory() -> io::Result<PathBuf> {
         // Termux cannot write Android's /tmp. Use a fixed app-private root,
         // independent of HOME/TMPDIR, so listeners and sandboxes agree. Keep
         // room for the transport's 64-byte SHA-256 name in sun_path.
-        Ok(PathBuf::from("/data/data/com.termux/files/home/.codex-s"))
+        use codex_utils_home_dir::termux;
+
+        const _: () = assert!(
+            "/data/data//files/home/.codex-s/".len() + termux::APP_PACKAGE.len() + 64 < 108,
+            "CODEX_TERMUX_APP_PACKAGE is too long for the Android Unix socket path"
+        );
+        Ok(termux::files_dir().join("home/.codex-s"))
     }
     #[cfg(not(target_os = "android"))]
     {

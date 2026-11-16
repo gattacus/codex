@@ -48,6 +48,14 @@ pub(crate) struct RemoteControlCommand {
     #[arg(long, requires = "no_daemon", value_parser = parse_remote_name)]
     name: Option<String>,
 
+    /// Use the bundled Android app's private foreground socket.
+    #[arg(long, global = true, hide = !cfg!(target_os = "android"))]
+    app_socket: bool,
+
+    /// Exit if the owning Android service process dies.
+    #[arg(long, requires_all = ["no_daemon", "app_socket"], hide = true)]
+    app_parent_pid: Option<i32>,
+
     #[command(subcommand)]
     pub(super) subcommand: Option<RemoteControlSubcommand>,
 }
@@ -67,6 +75,7 @@ impl RemoteControlCommand {
             Some(RemoteControlSubcommand::Start) => "remote-control start",
             Some(RemoteControlSubcommand::Stop) => "remote-control stop",
             Some(RemoteControlSubcommand::Pair) => "remote-control pair",
+            Some(RemoteControlSubcommand::Status) => "remote-control status",
         }
     }
 }
@@ -81,6 +90,10 @@ pub(super) enum RemoteControlSubcommand {
 
     /// Create and print a short-lived manual pairing code.
     Pair,
+
+    /// Query the bundled Android app's foreground server.
+    #[command(hide = !cfg!(target_os = "android"))]
+    Status,
 }
 
 pub(crate) async fn run(
@@ -92,12 +105,26 @@ pub(crate) async fn run(
         anyhow::bail!("`--no-daemon` cannot be used with a remote-control subcommand");
     }
 
+    let app_socket = if command.app_socket {
+        match command.subcommand {
+            None if command.no_daemon && command.app_parent_pid.is_some() => {}
+            Some(RemoteControlSubcommand::Pair | RemoteControlSubcommand::Status) => {}
+            _ => {
+                anyhow::bail!("--app-socket requires pair, status, or an owned foreground process")
+            }
+        }
+        Some(android_app_socket(command.app_parent_pid)?)
+    } else {
+        None
+    };
+
     if command.subcommand.is_none() {
         if command.no_daemon || command.json || !daemon_eligible(&root_config_overrides).await? {
             run_foreground_remote_control(
                 command.json,
                 command.pair,
                 command.name.clone(),
+                app_socket,
                 arg0_paths,
                 root_config_overrides,
             )
@@ -117,6 +144,7 @@ pub(crate) async fn run(
                         command.json,
                         command.pair,
                         command.name.clone(),
+                        None,
                         arg0_paths,
                         root_config_overrides,
                     )
@@ -129,6 +157,7 @@ pub(crate) async fn run(
                     command.json,
                     command.pair,
                     command.name.clone(),
+                    None,
                     arg0_paths,
                     root_config_overrides,
                 )
@@ -164,8 +193,26 @@ pub(crate) async fn run(
             print_remote_control_stop_output(&output, command.json)?;
         }
         Some(RemoteControlSubcommand::Pair) => {
-            let output = codex_app_server_daemon::start_remote_control_pairing().await?;
+            let output = if let Some(socket) = app_socket {
+                codex_app_server_daemon::start_remote_control_pairing_on_socket(socket.as_path())
+                    .await?
+            } else {
+                codex_app_server_daemon::start_remote_control_pairing().await?
+            };
             print_remote_control_pairing_output(&output, command.json)?;
+        }
+        Some(RemoteControlSubcommand::Status) => {
+            let socket = app_socket.context("status requires --app-socket")?;
+            let status =
+                codex_app_server_daemon::remote_control_status_on_socket(socket.as_path()).await?;
+            if command.json {
+                println!(
+                    "{}",
+                    serde_json::to_string(&RemoteControlStartJsonOutput::foreground(&status))?
+                );
+            } else {
+                println!("{}", remote_control_start_human_message(&status)?);
+            }
         }
         None => unreachable!("bare remote-control returned before explicit subcommand dispatch"),
     }
@@ -204,30 +251,72 @@ fn print_remote_control_progress(json: bool, message: &str) -> anyhow::Result<()
     Ok(())
 }
 
+#[cfg(target_os = "android")]
+fn android_app_socket(parent_pid: Option<i32>) -> anyhow::Result<AbsolutePathBuf> {
+    if let Some(parent_pid) = parent_pid {
+        // Arm the parent-death signal before checking the PID to close the fork/exec race.
+        if unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL, 0, 0, 0) } == -1 {
+            return Err(std::io::Error::last_os_error()).context("could not watch the app process");
+        }
+        anyhow::ensure!(
+            unsafe { libc::getppid() } == parent_pid,
+            "app process exited"
+        );
+    }
+    let root = codex_uds::prepare_shared_daemon_socket_directory()?;
+    Ok(AbsolutePathBuf::from_absolute_path(
+        root.join("app-remote.sock"),
+    )?)
+}
+
+#[cfg(not(target_os = "android"))]
+fn android_app_socket(_parent_pid: Option<i32>) -> anyhow::Result<AbsolutePathBuf> {
+    anyhow::bail!("--app-socket is only available on Android")
+}
+
 async fn run_foreground_remote_control(
     json: bool,
     pair: bool,
     name: Option<String>,
+    app_socket: Option<AbsolutePathBuf>,
     arg0_paths: Arg0DispatchPaths,
     root_config_overrides: CliConfigOverrides,
 ) -> anyhow::Result<()> {
     print_remote_control_progress(json, "Starting app-server with remote control enabled...")?;
     #[cfg(not(windows))]
-    let socket_dir = tempfile::Builder::new()
-        .prefix("codex-rc-")
-        .tempdir_in("/tmp")
-        .or_else(|_| tempfile::tempdir())
-        .context("failed to create private app-server socket directory")?;
+    let socket_dir = if app_socket.is_none() {
+        Some(
+            tempfile::Builder::new()
+                .prefix("codex-rc-")
+                .tempdir_in("/tmp")
+                .or_else(|_| tempfile::tempdir())
+                .context("failed to create private app-server socket directory")?,
+        )
+    } else {
+        None
+    };
     #[cfg(not(windows))]
-    let socket_path = socket_dir.path().join("rc.sock");
+    let socket_path = match app_socket {
+        Some(path) => path,
+        None => AbsolutePathBuf::from_absolute_path(
+            socket_dir
+                .as_ref()
+                .context("missing socket directory")?
+                .path()
+                .join("rc.sock"),
+        )?,
+    };
     // Let the transport create this parent with a protected DACL instead of
     // inheriting the broader ACL from a directory created under `%TEMP%`.
     #[cfg(windows)]
-    let socket_path = std::env::temp_dir()
-        .join("codex-remote-control")
-        .join(format!("rc-{}.sock", std::process::id()));
-    let socket_path = AbsolutePathBuf::from_absolute_path(&socket_path)
-        .context("private app-server socket path was not absolute")?;
+    let socket_path = {
+        debug_assert!(app_socket.is_none(), "app socket is Android-only");
+        let path = std::env::temp_dir()
+            .join("codex-remote-control")
+            .join(format!("rc-{}.sock", std::process::id()));
+        AbsolutePathBuf::from_absolute_path(&path)
+            .context("private app-server socket path was not absolute")?
+    };
     let transport = AppServerTransport::UnixSocket {
         socket_path: socket_path.clone(),
     };
@@ -237,7 +326,7 @@ async fn run_foreground_remote_control(
         install_shutdown_signal_handler: false,
         ..Default::default()
     };
-    let (stop_rx, stop_signal_task) = foreground_stop_signal();
+    let (stop_rx, stop_signal_task) = foreground_stop_signal()?;
     let app_server = codex_app_server::run_main_with_transport_options(
         arg0_paths,
         root_config_overrides,
@@ -304,15 +393,24 @@ async fn run_foreground_remote_control(
     result
 }
 
-fn foreground_stop_signal() -> (watch::Receiver<bool>, JoinHandle<()>) {
+fn foreground_stop_signal() -> std::io::Result<(watch::Receiver<bool>, JoinHandle<()>)> {
+    #[cfg(unix)]
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     let (stop_tx, stop_rx) = watch::channel(false);
     let task = tokio::spawn(async move {
-        if let Err(err) = tokio::signal::ctrl_c().await {
+        #[cfg(unix)]
+        let ctrl_c = tokio::select! {
+            result = tokio::signal::ctrl_c() => result,
+            _ = terminate.recv() => Ok(()),
+        };
+        #[cfg(not(unix))]
+        let ctrl_c = tokio::signal::ctrl_c().await;
+        if let Err(err) = ctrl_c {
             eprintln!("failed to listen for Ctrl-C: {err}");
         }
         let _ = stop_tx.send(true);
     });
-    (stop_rx, task)
+    Ok((stop_rx, task))
 }
 
 enum ForegroundStartupResult {
