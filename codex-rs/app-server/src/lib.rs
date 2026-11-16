@@ -491,6 +491,7 @@ pub struct AppServerRuntimeOptions {
     pub code_mode_host_transport: CodeModeHostTransport,
     pub plugin_startup_tasks: PluginStartupTasks,
     pub remote_control_startup_mode: RemoteControlStartupMode,
+    pub remote_control_server_name: Option<String>,
     pub install_shutdown_signal_handler: bool,
     pub managed_daemon: bool,
 }
@@ -502,6 +503,7 @@ impl Default for AppServerRuntimeOptions {
             code_mode_host_transport: CodeModeHostTransport::Local,
             plugin_startup_tasks: PluginStartupTasks::Start,
             remote_control_startup_mode: RemoteControlStartupMode::ResolvePersisted,
+            remote_control_server_name: None,
             install_shutdown_signal_handler: true,
             managed_daemon: false,
         }
@@ -903,6 +905,7 @@ pub async fn run_main_with_transport_options(
 
     let (remote_control_accept_handle, remote_control_handle) = start_remote_control(
         RemoteControlStartConfig {
+            server_name: runtime_options.remote_control_server_name.clone(),
             runtime_auth: runtime_auth_slot
                 .clone()
                 .map(|slot| (slot, config.runtime_auth_mode)),

@@ -19,7 +19,8 @@ Build in a dedicated checkout:
 cd codex-rs
 OPENSSL_NO_VENDOR=1 OPENSSL_DIR="$PREFIX" CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=2 sh ../scripts/termux/cargo.sh build -p codex-cli --bin codex --profile dev-small
 sh ../scripts/termux/cargo.sh test -p codex-uds --profile dev-small
-./target/dev-small/codex remote-control --no-daemon --pair
+sh ../scripts/termux/install.sh
+~/.local/bin/codex-termux remote-control --no-daemon --pair --name "My Phone"
 ```
 
 Keep the foreground process running and enter its printed pairing code in the
@@ -36,7 +37,17 @@ run its test executable on Android, then test remote control on the device.
 The build wrapper temporarily excludes the separate V8 host/runtime workspace
 members and their Git patch, then restores Cargo.toml and Cargo.lock on exit.
 This avoids downloading Chromium for the CLI, which does not link that host.
-The optional V8 code-mode host is not included in this Android artifact.
+The separate V8 code-mode host is not rebuilt in this Android artifact.
+The installer locates an existing native `codex-code-mode-host` (beside the
+installed CLI, on PATH, or in `$PREFIX/bin`) and installs an adjacent symlink.
+It refuses to install the CLI if no executable helper is available. An explicit
+helper can be supplied with `--helper /path/to/codex-code-mode-host`.
+For a downloaded CLI use `--binary /path/to/codex` with the same installer.
+
+`--name "My Phone"` changes the name advertised to the remote app for this
+foreground server. Omit it to use the hostname. It requires `--no-daemon`;
+blank names and control characters are rejected. Restart the foreground server
+to change its name. Reconnect or refresh the remote app to see the new name.
 
 ## Validation on the Android device (2026-11-16)
 
@@ -52,7 +63,7 @@ The validated native executable is installed beside the original CLI at
 `~/.local/bin/codex-termux`. Start it in your own Termux terminal:
 
 ```sh
-~/.local/bin/codex-termux remote-control --no-daemon --pair
+~/.local/bin/codex-termux remote-control --no-daemon --pair --name "My Phone"
 ```
 
 Enter the printed short-lived code in the remote app and keep this process

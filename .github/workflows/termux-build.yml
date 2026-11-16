@@ -41,18 +41,27 @@ jobs:
             codex-rs/target
           key: termux-build-${{ runner.os }}-${{ github.run_id }}
           restore-keys: termux-build-${{ runner.os }}-
+      - name: Test Termux installer
+        run: python3 ../scripts/termux/test_install.py
+      - name: Test custom remote name on Linux
+        run: bash ../scripts/termux/cargo.sh test -p codex-app-server-transport --lib custom_name
       - name: Test Unix socket security on Linux
         run: bash ../scripts/termux/cargo.sh test -p codex-uds --profile dev-small
       - name: Build Android CLI and device tests
         run: |
           bash ../scripts/termux/cargo.sh build -p codex-cli --bin codex --target aarch64-linux-android --profile dev-small
           bash ../scripts/termux/cargo.sh test -p codex-uds --target aarch64-linux-android --profile dev-small --no-run
+      - name: Package CLI with installer and instructions
+        run: |
+          mkdir -p ../termux-dist/tests
+          cp target/aarch64-linux-android/dev-small/codex ../termux-dist/codex
+          cp ../scripts/termux/install.sh ../termux-dist/install.sh
+          cp ../TERMUX.md ../termux-dist/README.md
+          find target/aarch64-linux-android/dev-small/deps -maxdepth 1 -name 'codex_uds-*' -type f -executable -exec cp {} ../termux-dist/tests/ \;
       - uses: actions/upload-artifact@v4
         with:
           name: codex-termux-aarch64
-          path: |
-            codex-rs/target/aarch64-linux-android/dev-small/codex
-            codex-rs/target/aarch64-linux-android/dev-small/deps/codex_uds-*
+          path: termux-dist/
       - uses: actions/cache/save@v4
         if: always()
         with:

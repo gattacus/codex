@@ -44,8 +44,20 @@ pub(crate) struct RemoteControlCommand {
     #[arg(long = "pair", requires = "no_daemon")]
     pair: bool,
 
+    /// Display name advertised to the remote app (defaults to the hostname).
+    #[arg(long, requires = "no_daemon", value_parser = parse_remote_name)]
+    name: Option<String>,
+
     #[command(subcommand)]
     pub(super) subcommand: Option<RemoteControlSubcommand>,
+}
+
+fn parse_remote_name(value: &str) -> Result<String, String> {
+    let name = value.trim();
+    if name.is_empty() || name.chars().any(char::is_control) {
+        return Err("name must contain visible text and no control characters".to_string());
+    }
+    Ok(name.to_string())
 }
 
 impl RemoteControlCommand {
@@ -85,6 +97,7 @@ pub(crate) async fn run(
             run_foreground_remote_control(
                 command.json,
                 command.pair,
+                command.name.clone(),
                 arg0_paths,
                 root_config_overrides,
             )
@@ -103,6 +116,7 @@ pub(crate) async fn run(
                     return run_foreground_remote_control(
                         command.json,
                         command.pair,
+                        command.name.clone(),
                         arg0_paths,
                         root_config_overrides,
                     )
@@ -114,6 +128,7 @@ pub(crate) async fn run(
                 return run_foreground_remote_control(
                     command.json,
                     command.pair,
+                    command.name.clone(),
                     arg0_paths,
                     root_config_overrides,
                 )
@@ -192,6 +207,7 @@ fn print_remote_control_progress(json: bool, message: &str) -> anyhow::Result<()
 async fn run_foreground_remote_control(
     json: bool,
     pair: bool,
+    name: Option<String>,
     arg0_paths: Arg0DispatchPaths,
     root_config_overrides: CliConfigOverrides,
 ) -> anyhow::Result<()> {
@@ -217,6 +233,7 @@ async fn run_foreground_remote_control(
     };
     let runtime_options = AppServerRuntimeOptions {
         remote_control_startup_mode: codex_app_server::RemoteControlStartupMode::EnabledEphemeral,
+        remote_control_server_name: name,
         install_shutdown_signal_handler: false,
         ..Default::default()
     };
@@ -611,6 +628,13 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
+
+    #[test]
+    fn custom_name_is_trimmed_and_rejects_empty_or_control_text() {
+        assert_eq!(parse_remote_name("  My Phone  ").unwrap(), "My Phone");
+        assert!(parse_remote_name("   ").is_err());
+        assert!(parse_remote_name("Phone\nOther").is_err());
+    }
 
     fn remote_control_status(
         status: RemoteControlConnectionStatus,

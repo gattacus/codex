@@ -66,10 +66,20 @@ use tracing::info;
 use tracing::warn;
 
 pub struct RemoteControlStartConfig {
+    /// Optional process-owned display name; the hostname remains the default.
+    pub server_name: Option<String>,
     pub runtime_auth: Option<(RuntimeAuthSlot, RuntimeAuthMode)>,
     pub remote_control_url: String,
     pub installation_id: String,
     pub policy: RemoteControlPolicy,
+}
+
+impl RemoteControlStartConfig {
+    fn server_name(&self) -> String {
+        self.server_name
+            .clone()
+            .unwrap_or_else(|| gethostname().to_string_lossy().trim().to_string())
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
