@@ -5,7 +5,7 @@
 mod availability;
 #[cfg(windows)]
 mod native;
-#[cfg(any(windows, test))]
+#[cfg(all(any(windows, test), not(target_os = "android")))]
 mod policy;
 mod transport;
 #[cfg(windows)]
@@ -161,6 +161,6 @@ pub fn run_main() -> ! {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "android")))]
 #[path = "policy_tests.rs"]
 mod tests;
