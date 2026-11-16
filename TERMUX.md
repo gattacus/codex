@@ -37,3 +37,24 @@ The build wrapper temporarily excludes the separate V8 host/runtime workspace
 members and their Git patch, then restores Cargo.toml and Cargo.lock on exit.
 This avoids downloading Chromium for the CLI, which does not link that host.
 The optional V8 code-mode host is not included in this Android artifact.
+
+## Validation on the Android device (2026-11-16)
+
+- Native aarch64 Android CLI built successfully with Rust 1.99.1.
+- All 8 `codex-uds` tests passed, including private-directory checks, a full
+  SHA-256 socket pathname bind, and client/server data exchange.
+- Installed CLI startup succeeded with `remote-control --no-daemon --pair`:
+  the relay reported the machine available and returned a manual pairing code.
+- `--pair` without `--no-daemon` correctly fails argument validation.
+- Account connectivity and database checks passed in `codex doctor`.
+
+The validated native executable is installed beside the original CLI at
+`~/.local/bin/codex-termux`. Start it in your own Termux terminal:
+
+```sh
+~/.local/bin/codex-termux remote-control --no-daemon --pair
+```
+
+Enter the printed short-lived code in the remote app and keep this process
+running. Press Ctrl-C to stop it. Completing the connection in the remote app
+requires the user to enter the code; that UI step was not automated.
