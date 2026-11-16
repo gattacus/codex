@@ -16,4 +16,7 @@ for member in ('code-mode-host', 'code-mode-runtime', 'v8-poc'):
 s = '\n'.join(line for line in s.split('\n') if not line.startswith('v8 = { git ='))
 p.write_text(s)
 PY
+if [ "$(uname -o)" = Android ] && command -v protoc >/dev/null 2>&1; then
+    export PROTOC="$(command -v protoc)"
+fi
 cargo "$@"
