@@ -40,6 +40,10 @@ pub(crate) struct RemoteControlCommand {
     #[arg(long = "no-daemon")]
     pub(super) no_daemon: bool,
 
+    /// Print a manual pairing code from the foreground server.
+    #[arg(long = "pair", requires = "no_daemon")]
+    pair: bool,
+
     #[command(subcommand)]
     pub(super) subcommand: Option<RemoteControlSubcommand>,
 }
@@ -78,7 +82,13 @@ pub(crate) async fn run(
 
     if command.subcommand.is_none() {
         if command.no_daemon || command.json || !daemon_eligible(&root_config_overrides).await? {
-            run_foreground_remote_control(command.json, arg0_paths, root_config_overrides).await?;
+            run_foreground_remote_control(
+                command.json,
+                command.pair,
+                arg0_paths,
+                root_config_overrides,
+            )
+            .await?;
         } else {
             print_remote_control_progress(
                 command.json,
@@ -92,6 +102,7 @@ pub(crate) async fn run(
                 Err(error) if error.is::<codex_app_server_daemon::DetachedLaunchRestricted>() => {
                     return run_foreground_remote_control(
                         command.json,
+                        command.pair,
                         arg0_paths,
                         root_config_overrides,
                     )
@@ -102,6 +113,7 @@ pub(crate) async fn run(
             if daemon.backend.is_none() {
                 return run_foreground_remote_control(
                     command.json,
+                    command.pair,
                     arg0_paths,
                     root_config_overrides,
                 )
@@ -179,6 +191,7 @@ fn print_remote_control_progress(json: bool, message: &str) -> anyhow::Result<()
 
 async fn run_foreground_remote_control(
     json: bool,
+    pair: bool,
     arg0_paths: Arg0DispatchPaths,
     root_config_overrides: CliConfigOverrides,
 ) -> anyhow::Result<()> {
@@ -223,7 +236,7 @@ async fn run_foreground_remote_control(
 
     let summary = match wait_for_foreground_remote_control_start(
         &mut app_server_task,
-        wait_for_foreground_remote_control_ready(socket_path),
+        wait_for_foreground_remote_control_ready(socket_path.clone()),
         stop_rx.clone(),
     )
     .await
@@ -255,6 +268,18 @@ async fn run_foreground_remote_control(
         abort_foreground_app_server(app_server_task).await;
         stop_signal_task.abort();
         return Err(error);
+    }
+
+    if pair {
+        let pairing =
+            codex_app_server_daemon::start_remote_control_pairing_on_socket(socket_path.as_path())
+                .await
+                .and_then(|output| print_remote_control_pairing_output(&output, json));
+        if let Err(error) = pairing {
+            abort_foreground_app_server(app_server_task).await;
+            stop_signal_task.abort();
+            return Err(error);
+        }
     }
 
     let result = wait_for_foreground_app_server(app_server_task, stop_rx).await;

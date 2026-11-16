@@ -285,7 +285,15 @@ pub async fn enable_remote_control_on_socket(
 pub async fn start_remote_control_pairing() -> Result<RemoteControlPairingStartResponse> {
     ensure_supported_platform()?;
     let daemon = Daemon::from_environment()?;
-    remote_control_client::start_pairing(&daemon.socket_path).await
+    start_remote_control_pairing_on_socket(&daemon.socket_path).await
+}
+
+/// Starts manual pairing through a running foreground or daemon app-server.
+pub async fn start_remote_control_pairing_on_socket(
+    socket_path: &Path,
+) -> Result<RemoteControlPairingStartResponse> {
+    ensure_supported_platform()?;
+    remote_control_client::start_pairing(socket_path).await
 }
 
 pub async fn set_remote_control(mode: RemoteControlMode) -> Result<RemoteControlOutput> {

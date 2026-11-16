@@ -19,11 +19,13 @@ Build in a dedicated checkout:
 cd codex-rs
 OPENSSL_NO_VENDOR=1 OPENSSL_DIR="$PREFIX" CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=2 sh ../scripts/termux/cargo.sh build -p codex-cli --bin codex --profile dev-small
 sh ../scripts/termux/cargo.sh test -p codex-uds --profile dev-small
-./target/dev-small/codex remote-control --no-daemon
+./target/dev-small/codex remote-control --no-daemon --pair
 ```
 
-Keep the foreground process running. In a separate terminal, use the same
-binary with `remote-control pair`. Foreground mode avoids the requirement for
+Keep the foreground process running and enter its printed pairing code in the
+remote app. The `--pair` flag uses the foreground socket directly; upstream
+`remote-control pair` only discovers a daemon socket. Foreground mode avoids
+the requirement for
 a complete managed runtime package. The hosted model and pairing services
 still require your existing account and remote-control access.
 
