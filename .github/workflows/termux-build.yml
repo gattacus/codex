@@ -25,17 +25,21 @@ jobs:
         run: |
           NDK=$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
           TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          ln -s "$TOOLCHAIN/llvm-ranlib" "$RUNNER_TEMP/aarch64-linux-android-ranlib"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          echo "RANLIB_aarch64_linux_android=$TOOLCHAIN/llvm-ranlib" >> "$GITHUB_ENV"
           echo "CC_aarch64_linux_android=$TOOLCHAIN/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
           echo "CXX_aarch64_linux_android=$TOOLCHAIN/aarch64-linux-android24-clang++" >> "$GITHUB_ENV"
           echo "AR_aarch64_linux_android=$TOOLCHAIN/llvm-ar" >> "$GITHUB_ENV"
           echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$TOOLCHAIN/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         with:
           path: |
             ~/.cargo/git
             ~/.cargo/registry
             codex-rs/target
-          key: termux-build-${{ runner.os }}-${{ hashFiles('codex-rs/Cargo.lock') }}
+          key: termux-build-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: termux-build-${{ runner.os }}-
       - name: Test Unix socket security on Linux
         run: bash ../scripts/termux/cargo.sh test -p codex-uds --profile dev-small
       - name: Build Android CLI and device tests
@@ -48,3 +52,11 @@ jobs:
           path: |
             codex-rs/target/aarch64-linux-android/dev-small/codex
             codex-rs/target/aarch64-linux-android/dev-small/deps/codex_uds-*
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            ~/.cargo/git
+            ~/.cargo/registry
+            codex-rs/target
+          key: termux-build-${{ runner.os }}-${{ github.run_id }}
