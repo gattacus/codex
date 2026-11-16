@@ -6,11 +6,17 @@ The directory retains upstream's UID, symlink and mode-0700 checks. Its short
 name accommodates the transport's full SHA-256 filename within sun_path.
 This path targets the standard com.termux package on Android user 0.
 
-Build in Termux with Rust, clang, make, pkg-config and protobuf installed:
+Install the native build tools in Termux:
+
+```sh
+pkg install rust clang make pkg-config protobuf cmake
+```
+
+Build in a dedicated checkout:
 
 ```sh
 cd codex-rs
-CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=2 sh ../scripts/termux/cargo.sh build -p codex-cli --bin codex --profile dev-small
+OPENSSL_NO_VENDOR=1 OPENSSL_DIR="$PREFIX" CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=2 sh ../scripts/termux/cargo.sh build -p codex-cli --bin codex --profile dev-small
 sh ../scripts/termux/cargo.sh test -p codex-uds --profile dev-small
 ./target/dev-small/codex remote-control --no-daemon
 ```
