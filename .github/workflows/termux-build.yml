@@ -5,14 +5,6 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - app_package: com.termux
-            artifact: codex-termux-aarch64
-          - app_package: io.cdx
-            artifact: codex-termux-aarch64-io.cdx
     permissions:
       contents: read
     defaults:
@@ -47,25 +39,21 @@ jobs:
             ~/.cargo/git
             ~/.cargo/registry
             codex-rs/target
-          key: termux-build-${{ runner.os }}-${{ matrix.app_package }}-${{ github.run_id }}
-          restore-keys: termux-build-${{ runner.os }}-${{ matrix.app_package }}-
+          key: termux-build-${{ runner.os }}-com.termux-${{ github.run_id }}
+          restore-keys: termux-build-${{ runner.os }}-com.termux-
       - name: Test Termux installer
-        if: matrix.app_package == 'com.termux'
         run: python3 ../scripts/termux/test_install.py
       - name: Test custom remote name on Linux
-        if: matrix.app_package == 'com.termux'
         run: bash ../scripts/termux/cargo.sh test -p codex-app-server-transport --lib custom_name
       - name: Test Unix socket security on Linux
-        if: matrix.app_package == 'com.termux'
         run: bash ../scripts/termux/cargo.sh test -p codex-uds --profile dev-small
       - name: Test app socket status and Termux package selection
-        if: matrix.app_package == 'com.termux'
         run: |
           bash ../scripts/termux/cargo.sh test -p codex-app-server-daemon --lib status_returns_initial_snapshot_without_enabling_remote_control --profile dev-small
           bash ../scripts/termux/cargo.sh test -p codex-utils-home-dir --lib termux::tests --profile dev-small
       - name: Build Android CLI and device tests
         env:
-          CODEX_TERMUX_APP_PACKAGE: ${{ matrix.app_package }}
+          CODEX_TERMUX_APP_PACKAGE: com.termux
         run: |
           bash ../scripts/termux/cargo.sh build -p codex-cli --bin codex --target aarch64-linux-android --profile dev-small
           bash ../scripts/termux/cargo.sh test -p codex-uds --target aarch64-linux-android --profile dev-small --no-run
@@ -78,7 +66,7 @@ jobs:
           find target/aarch64-linux-android/dev-small/deps -maxdepth 1 -name 'codex_uds-*' -type f -executable -exec cp {} ../termux-dist/tests/ \;
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
+          name: codex-termux-aarch64
           path: termux-dist/
       - uses: actions/cache/save@v4
         if: always()
@@ -87,4 +75,4 @@ jobs:
             ~/.cargo/git
             ~/.cargo/registry
             codex-rs/target
-          key: termux-build-${{ runner.os }}-${{ matrix.app_package }}-${{ github.run_id }}
+          key: termux-build-${{ runner.os }}-com.termux-${{ github.run_id }}

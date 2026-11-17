@@ -99,12 +99,10 @@ both the CLI and the adjacent link to your existing native helper.
 
 ## Termux Codex APK
 
-To build for the APK, set `CODEX_TERMUX_APP_PACKAGE=io.cdx` in the
-Android Cargo build environment. Leave it unset for stock Termux. This single
-build-time setting selects the private socket root and CA bundle under the
-same Android app directory. The current socket layout permits at most
-11 ASCII bytes for the package ID. The workflow builds and publishes separate
-artifacts for `com.termux` and `io.cdx`.
+The APK and stock Termux use the `com.termux` package ID. The workflow
+publishes the ARM64 CLI as `codex-termux-aarch64`. For local Android builds,
+`CODEX_TERMUX_APP_PACKAGE` defaults to `com.termux` and selects the private
+socket root and CA bundle under that app's data directory.
 
 The app starts its own foreground server with
 `codex remote-control --no-daemon --json --app-socket --app-parent-pid <pid>`,
